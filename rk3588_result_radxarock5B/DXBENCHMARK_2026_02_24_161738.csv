@@ -1,0 +1,2 @@
+Runtime Version, Firmware Version, Device Driver Version,PCIe Driver Version,Model Name,FPS,NPU Inference Time Mean,NPU Inference Time SD,NPU Inference Time CV,Latency Mean,Latency SD,Latency CV
+3.1.0,2.4.0,2.1.0,2.0.1,YOLOV5X_2.dxnn,61.75,47.65,1.27,0.03,95.70,9.91,0.10
