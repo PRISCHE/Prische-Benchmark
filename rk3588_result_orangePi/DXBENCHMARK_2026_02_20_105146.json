@@ -1,0 +1,22 @@
+{
+  "Runtime Version": "3.1.0",
+  "Firmware Version": "2.4.0",
+  "Device Driver Version": "2.1.0",
+  "PCIe Driver Version": "2.0.1",
+  "results": [
+    {
+      "Model Name": "YOLOV5X_2.dxnn",
+      "FPS": 62.38,
+      "NPU Inference Time": {
+        "mean": 47.79,
+        "sd": 0.60,
+        "cv": 0.01
+      },
+      "Latency": {
+        "mean": 95.99,
+        "sd": 6.45,
+        "cv": 0.07
+      }
+    }
+  ]
+}

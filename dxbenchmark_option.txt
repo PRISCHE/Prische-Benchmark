@@ -1,0 +1,40 @@
+DXRT v3.2.0 dxbenchmark
+Usage:
+  dxbenchmark [OPTION...]
+
+      --dir arg          Model directory
+      --result-path arg  Destination of result file (default: .)
+      --sort arg         Sorting criteria
+                           name: Model Name
+                           fps: FPS
+                           time: NPU Inference Time
+                           latency: Latency (default: name)
+      --order arg        Sorting order
+                           asc: Ascending order
+                           desc: Descending order (default: asc)
+  -l, --loops arg        Number of inference loops to perform (default: 0)
+  -t, --time arg         Time duration to perform (default: 0)
+      --warmup arg       Warmup time (default: 10)
+  -n, --npu arg          NPU bounding (default:0)
+                           0: NPU_ALL
+                           1: NPU_0
+                           2: NPU_1
+                           3: NPU_2
+                           4: NPU_0/1
+                           5: NPU_1/2
+                           6: NPU_0/2
+  -d, --devices arg      Specify target NPU devices.
+                         Examples:
+                           'all' (default): Use all available/bound NPUs
+                           '0': Use NPU0 only
+                           '0,1,2': Use NPU0, NPU1, and NPU2
+                           'count:N': Use the first N NPUs
+                           (e.g., 'count:2' for NPU0, NPU1) (default: all)
+      --only-data        Make only data result (csv, json)
+      --recursive        Search models recursively in subdirectories 
+                         (default: base directory only)
+      --use-ort          Enable ONNX Runtime for CPU tasks in the model 
+                         graph
+                         If disabled, only NPU tasks operate
+  -v, --verbose          Shows NPU Processing Time and Latency
+  -h, --help             Print usage
