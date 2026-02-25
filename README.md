@@ -6,10 +6,25 @@
 
 ## 1. 사전 요구사항: `dx-all-suite` SDK
 
-본 벤치마크 프로젝트는 NPU 부하 및 성능 측정을 위해 내부적으로 DeepX에서 제공하는 SDK인 `dx-all-suite` 내의 `dxbenchmark` 도구를 호출합니다. 따라서 벤치마크를 실행할 보드에 해당 SDK가 먼저 클론(Clone) 및 설치되어 있어야 합니다.
+본 벤치마크 프로젝트는 NPU 부하 및 성능 측정을 위해 내부적으로 DeepX에서 제공하는 SDK인 `dx-all-suite` 내의 `dxbenchmark` 바이너리를 호출합니다. 따라서 벤치마크를 실행할 보드에 해당 SDK가 먼저 클론(Clone) 및 설치되어 있어야 합니다.
 
-* **핵심 벤치마크 도구 경로**: `/home/사용자명/dx-all-suite/dx-runtime/dx_rt/bin/dxbenchmark`
-* 이 스크립트(`/home/사용자명/benchmark/run_dxbenchmark.sh`)는 위의 `dxbenchmark` 바이너리를 가져와 활용합니다.
+### `dx-all-suite` 설치 과정 요약
+```bash
+# 1. 원격 저장소에서 SDK 클론
+git clone https://github.com/DEEPX-AI/dx-all-suite.git
+cd dx-all-suite
+
+# 2. 서브모듈(submodule) 초기화 및 업데이트 (dx-runtime 등 포함)
+git submodule update --init --recursive
+
+# 3. dx-runtime 디렉터리로 이동 후 전체 툴체인 및 드라이버 설치
+cd dx-runtime
+./install.sh --all
+```
+> **참고:** 설치 스크립트 실행 시 권한이 필요할 수 있으며, NPU 드라이버 적용을 위해 재부팅이 요구될 수 있습니다. 설치 완료 후 아래 경로에 바이너리가 위치하는지 확인하세요.
+
+* **벤치마크 도구 경로**: `/home/사용자명/dx-all-suite/dx-runtime/dx_rt/bin/dxbenchmark`
+* 이 스크립트는 `dxbenchmark` 바이너리를 가져와 활용합니다.
 
 ---
 
