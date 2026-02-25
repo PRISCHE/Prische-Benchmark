@@ -8,7 +8,7 @@
 
 본 벤치마크 프로젝트는 NPU 부하 및 성능 측정을 위해 내부적으로 DeepX에서 제공하는 SDK인 `dx-all-suite` 내의 `dxbenchmark` 바이너리를 호출합니다. 따라서 벤치마크를 실행할 보드에 해당 SDK가 먼저 클론(Clone) 및 설치되어 있어야 합니다.
 
-### `dx-all-suite` 설치 과정 요약
+### `dx-all-suite` 설치
 ```bash
 # 1. 원격 저장소에서 SDK 클론
 git clone https://github.com/DEEPX-AI/dx-all-suite.git
