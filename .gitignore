@@ -1,2 +1,6 @@
 model_single/*.dxnn
 *.dxnn
+result/
+*result*/
+*.log
+*.json
