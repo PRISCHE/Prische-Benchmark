@@ -1,6 +1,22 @@
-model_single/*.dxnn
-*.dxnn
-result/
-*result*/
+# Input
+rtsp_address.txt
+test_video.mp4
+
+# Internal developer documentation
+architecture.md
+troubleshooting_debian12.md
+pipeline_gst/
+DX-doc/
+
+
+# Keep directories but ignore contents
+result_all/*
+!result/.gitkeep
+
+model/*
+!model/.gitkeep
+
+# MediaMTX and streaming temp files
+mediamtx
 *.log
-*.json
+hls_output/

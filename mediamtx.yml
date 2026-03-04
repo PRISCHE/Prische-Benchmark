@@ -1,0 +1,32 @@
+################################===============
+# MediaMTX Configuration
+################################===============
+
+# Global settings
+logLevel: info
+logDestinations: [stdout]
+
+# RTSP Server
+rtsp: yes
+rtspAddress: :8554
+
+# WebRTC Server
+webrtc: yes
+webrtcAddress: :8889
+# webrtcICEUDPPorts: [8189]
+# webrtcICETCPPorts: [8189]
+# Local testing doesn't strictly need STUN/TURN if on same LAN, 
+# but adding Google's public STUN is good practice.
+# webrtcICEServers:
+#   - url: stun:stun.l.google.com:19302
+
+# HLS Server (Backup)
+hls: yes
+hlsAddress: :8888
+hlsMuxerCloseAfter: 60s
+
+# Path settings
+paths:
+  all_others:
+    # Use internal source (publisher)
+    source: publisher

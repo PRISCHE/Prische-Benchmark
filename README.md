@@ -1,15 +1,7 @@
-## DeepX NPU 벤치마크 사용 설명서
+1. 사전 요구사항: dx-all-suite SDK
+본 벤치마크 프로젝트는 NPU 부하 및 성능 측정을 위해 내부적으로 DeepX에서 제공하는 SDK인 dx-all-suite 내의 dxbenchmark 바이너리를 호출합니다. 따라서 벤치마크를 실행할 보드에 해당 SDK가 먼저 클론(Clone) 및 설치되어 있어야 합니다.
 
-본 설명서는 다른 환경에서 **DeepX NPU (DX-M1 / V3)** 기반의 모델 추론 성능을 측정하고 시스템 상태(온도, CPU 사용률 등)를 모니터링하기 위한 가이드입니다.
-
----
-
-## 1. 사전 요구사항: `dx-all-suite` SDK
-
-본 벤치마크 프로젝트는 NPU 부하 및 성능 측정을 위해 내부적으로 DeepX에서 제공하는 SDK인 `dx-all-suite` 내의 `dxbenchmark` 바이너리를 호출합니다. 따라서 벤치마크를 실행할 보드에 해당 SDK가 먼저 클론(Clone) 및 설치되어 있어야 합니다.
-
-### `dx-all-suite` 설치
-```bash
+dx-all-suite 설치
 # 1. 원격 저장소에서 SDK 클론
 git clone https://github.com/DEEPX-AI/dx-all-suite.git
 cd dx-all-suite
@@ -20,121 +12,123 @@ git submodule update --init --recursive
 # 3. dx-runtime 디렉터리로 이동 후 전체 툴체인 및 드라이버 설치
 cd dx-runtime
 ./install.sh --all
-```
-> **참고:** 설치 스크립트 실행 시 권한이 필요할 수 있으며, NPU 드라이버 적용을 위해 재부팅이 요구될 수 있습니다. 설치 완료 후 아래 경로에 바이너리가 위치하는지 확인하세요.
+참고: 설치 스크립트 실행 시 권한이 필요할 수 있으며, NPU 드라이버 적용을 위해 재부팅이 요구될 수 있습니다. 설치 완료 후 아래 경로에 바이너리가 위치하는지 확인하세요.
 
-* **벤치마크 도구 경로**: `/home/사용자명/dx-all-suite/dx-runtime/dx_rt/bin/dxbenchmark`
-* 이 스크립트는 `dxbenchmark` 바이너리를 가져와 활용합니다.
+벤치마크 도구 경로: /home/사용자명/dx-all-suite/dx-runtime/dx_rt/bin/dxbenchmark
+이 스크립트는 dxbenchmark 바이너리를 가져와 활용합니다.
 
----
 
-## 2. 프로젝트 디렉터리 구조 및 주요 파일
+# GStreamer Pipeline Benchmark (DX-RT) 
 
-```text
-benchmark/
-├── run_dxbenchmark.sh   # NPU 벤치마크 실행 핵심 스크립트 (단일/병렬 모드 지원)
-├── cpu_temp_monitor.py  # CPU 온도·사용률·RAM 실시간 모니터링 파이썬 스크립트
-├── model_single/        # 기본 모델 디렉터리 (YOLOV5X_2.dxnn 모델 포함)
-└── result/              # 실행 후 벤치마크 결과(로그, JSON)가 자동 저장되는 폴더
-```
+이 프로젝트는 GStreamer와 DX-RT(DeepX NPU)를 연동하여 동작하는 **크로스플랫폼 AI 비디오 파이프라인 벤치마크 툴**입니다.  
+다양한 하드웨어(Rockchip, NXP, NVIDIA, x86 등)에서 GStreamer 플러그인을 통해 **하드웨어 가속 디코딩 및 인코딩**을 수행하고, 파이프라인 각 단계별 처리 지연(Latency)과 시스템 리소스(CPU, RAM, 잔류 온도)를 측정할 수 있습니다.
+
+> **주의 사항**: 이 Orange Pi 5 Plus (또는 Rockchip 기반 보드) 계열에서는 성능 극대화를 위해 **VPU 하드웨어 디코딩을 최우선으로 구동하여 CPU 병목을 방어**하도록 설계되어 있습니다.
 
 ---
 
-## 3. 벤치마크 실행 전 환경 설정 (사용자명 변경)
+## 🚀 주요 기능
 
-기본 스크립트는 기존 사용자명(`prische`) 기준으로 절대 경로가 설정되어 있습니다. 
-다른 사용자 환경에서 실행하기 위해 `run_dxbenchmark.sh` 파일 내부의 경로를 본인의 환경에 맞게 수정해야 합니다.
+- **크로스플랫폼 호환**: GStreamer의 `mppvideodec`, `v4l2slh264dec`, `nvv4l2decoder` 등 환경에 맞는 하드웨어 가속 플러그인을 **자동 감지하여 파이프라인을 구성**합니다.
+- **HW / SW 성능 비교 벤치마크**: 명령줄 인자를 통해 강제로 소프트웨어(CPU) 디코더/인코더(`avdec_h264`, `x264enc`)를 선택하여 하드웨어 가속 적용 시의 성능 향상폭을 객관적으로 수치화하여 비교할 수 있습니다.
+- **NV12 패스스루 아키텍처**: CPU 개입을 0%로 만들기 위해, 디코더의 NV12 출력을 색변환 없이 인코더까지 직결(Pass-through)하며, OSD도 NV12 버퍼(Y/UV 플레인)에 직접 작성합니다.
+- **비동기 멀티스레드 (Async Inference)**: ভিডিও 디스플레이(30fps)와 NPU 추론 주기(예: 15fps)를 분리하기 위해, 독립된 스레드에서 `RunAsync/Wait` 패턴으로 텐서를 처리하고 Mutex를 통해 결과를 공유합니다.
+- **파이프라인 통계 추출**: 각 프레임 단위로 `GstDecode`, `NPU Infer`, `PostProcess`, `OSD`, `GstEncode` 단계별 소요 시간을 정밀 측정하고, 종합 FPS 및 모델 TOPS(Tera Operations Per Second) 실효 성능을 예측합니다.
+- **자동 리포트 생성**: 벤치마크 종료 시, `result_all/` 디렉토리에 시스템 정보, 설정 변수, 단계별 레이턴시 최소/최대/평균 정보가 포함된 **Markdown** 테이블 요약본과 **JSON** 파일이 타임스탬프 단위로 자동 저장됩니다.
 
-### 수정해야 할 파일: `run_dxbenchmark.sh`
+---
 
-편집기(nano, vim 등)로 `run_dxbenchmark.sh` 파일을 열고 아래 변수들의 `/home/prische` 부분을 자신의 사용자 홈 디렉터리(예: `/home/user`)로 변경합니다.
+## 🛠 시스템 요구사항 및 의존성
+
+본 프로젝트는 아래와 같은 환경에서 개발 및 테스트되었습니다. 최적의 성능을 위해 권장 사양을 준수해 주세요.
+
+*   **지원 및 테스트 하드웨어**: Rockchip RK3588 기반 보드 (Orange Pi 5 Plus, Wavedyne 등) 및 일반 PC
+*   **운영체제 (OS)**: Ubuntu 22.04 LTS / 24.04 LTS (Armbian 포함) 또는 Debian 12 계열
+*   **커널 버전 (Kernel)**: Linux Kernel 5.10 이상 (현재 주 테스트 환경 : `6.1.115-vendor-rk35xx` 등)
+*   **DX-RT SDK**: DeepX NPU 추론을 위한 런타임 환경 (환경변수 `DXRT_DIR` 내지 기본 경로 `/home/prische/dx-all-suite/dx-runtime/dx_rt/build_aarch64` 요구)
+*   **GStreamer 버전**: GStreamer 1.20 이상 권장 (현재 테스트 환경: Ubuntu 24.04 기준 1.24.2, Debian 12 기준 1.22.x)
+    ```bash
+    sudo apt-get install libgstreamer1.0-dev libgstreamer-plugins-base1.0-dev
+    ```
+*   **Rockchip VPU 하드웨어 가속 패키지** (RK3588/Orange Pi 5 Plus 환경 사용 시 필수):
+    *   **라이브러리 권장 버전**: `librockchip-mpp` 1.3.x 이상 (현재 테스트 환경: 1.5.0)
+    *   **쉬운 설치 방안** (Ubuntu 24.04 기준): `sudo apt-get install gstreamer1.0-rockchip1 librockchip-mpp-dev`
+    *   > **참고**: 공식 패키지 저장소를 미지원하는 사설 Debian 12 환경 등에서 VPU 초기화 실패(0 FPS 멈춤 등)가 발생할 경우, 소스코드 직접 빌드를 위한 별도의 내부 트러블슈팅 가이드를 참고
+
+---
+
+## ⚙️ 빌드 방법 (Build Instructions)
+
+소스 코드를 다운로드 받은 후 `build.sh` 스크립트를 실행하면 CMake를 통해 C++ 파이프라인이 자동 빌드됩니다.
 
 ```bash
-# 수정 전 (예시)
-BENCHMARK_DIR="/home/prische/benchmark"
-DXBENCHMARK_PATH="/home/prische/dx-all-suite/dx-runtime/dx_rt/bin/dxbenchmark"
-DEFAULT_MODEL_DIR="/home/prische/benchmark/model_single"
-
-# 수정 후 (자신의 사용자명 '사용자ID'로 변경)
-BENCHMARK_DIR="/home/사용자ID/benchmark"
-DXBENCHMARK_PATH="/home/사용자ID/dx-all-suite/dx-runtime/dx_rt/bin/dxbenchmark"
-DEFAULT_MODEL_DIR="/home/사용자ID/benchmark/model_single"
+cd /home/prische/gstbenchmark
+bash build.sh
 ```
 
-> **Tip:** `$HOME` 환경 변수를 활용하여 `BENCHMARK_DIR="$HOME/benchmark"` 등으로 변경해두면 다른 계정에서도 경로 수정 없이 편리하게 사용할 수 있습니다.
+성공적으로 빌드되면, 디렉토리 루트에 `gst_pipeline` 실행 파일이 생성됩니다.
 
 ---
 
-## 4. 벤치마크 실행 방법 (`model_single` 활용)
+## 🏃 사용 방법 (Usage)
 
-`model_single` 디렉터리에 포함된 모델(YOLOV5X 등)을 활용하여 NPU 추론 성능을 측정합니다. 
+직접 `gst_pipeline` C++ 바이너리를 실행할 수도 있지만, 환경 모니터링 및 결과 분석 리포트를 자동으로 생성해주는 **Python 래퍼 스크립트(`run_pipeline_benchmark.py`) 사용을 권장**합니다.
 
-### 기본 실행 (단일 NPU 모드)
-기본적으로 `model_single` 모델을 60초간 추론하며 성능을 측정합니다.
+> **권한 안내**: 내부 NPU, VPU 하드웨어 가속 권한 및 DMA 접근을 위해 반드시 **루트 권한(`sudo`)**으로 파이썬 스크립트를 실행해 주시기 바랍니다.
+
+### 1. 입력 소스 설정 (`rtsp_address.txt`)
+
+프로젝트 최상단 디렉토리의 `rtsp_address.txt` 파일에 분석하고자 하는 타겟 RTSP 주소를 1줄로 기입해 주세요. 
+파이썬 측정 스크립트를 실행할 때, 이 파일에 적힌 주소를 기본 스트림 소스로 가장 먼저 읽어들입니다.
+
+### 2. 기본 실행 (하드웨어 디코더 + 하드웨어 인코더 권장사양 실행)
+
+사용 가능한 최적의 하드웨어 플러그인(VPU/NPU)을 자동으로 찾아 실행합니다. 
+
 ```bash
-./run_dxbenchmark.sh
+sudo python3 run_pipeline_benchmark.py --duration 60
 ```
 
-### 시간 및 모델 디렉터리 커스텀 실행
-추론 시간(`-t`)이나 다른 모델이 있는 디렉터리(`--dir`)를 별도로 지정할 수 있습니다.
-```bash
-# 120초 동안 실행
-./run_dxbenchmark.sh -t 120
+### 3. 특정 옵션을 지정하여 실행
 
-# 다른 모델 디렉터리를 지정하여 실행
-./run_dxbenchmark.sh --dir /path/to/other_model_dir -t 60
+입력 RTSP 주소, 모델 경로, 추론 간격, 동시 실행 채널 수 등을 수동으로 조절할 수 있습니다.
+
+```bash
+sudo python3 run_pipeline_benchmark.py \
+    --input "rtsp://Id:password@192.168.0.200:554/Streaming/Channels/101" \
+    --model "model/YoloV5N.dxnn" \
+    --num-channels 4 \
+    --interval 3 \
+    --duration 60
 ```
+*   `--input`: 분석할 대상 RTSP 주소입니다. (지정 시 `rtsp_address.txt`를 무시하고 이 옵션을 우선 적용합니다)
+*   `--model`: NPU 추론에 사용할 `.dxnn` 모델 파일 경로입니다.
+*   `--num-channels N`: 동시에 N개의 채널 파이프라인을 병렬로 실행하여 다중 채널 부하 테스트를 진행합니다. (기본값: 1)
+*   `--interval N`: N프레임 당 1프레임만 NPU 추론을 수행하고 나머지는 하드웨어 디코딩/인코딩 병목을 분석합니다. (예: 3)
+*   `--duration N`: 지정한 시간(초) 동안 벤치마크를 수행한 후 자동으로 종료하고 리포트를 생성합니다.
+*   `--output DIR`: 벤치마크 결과 리포트를 저장할 디렉토리를 지정합니다. (기본값: `result/`)
 
-### 병렬 모드 실행 (NPU 3코어 동시 부하)
-NPU의 3개 코어 전체에 부하를 주어 극한의 성능 타겟(예: 25 TOPS) 대비 실제 활용률을 측정합니다.
+### 4. HW vs SW 성능 비교 벤치마크 (소프트웨어 강제 지정)
+
+하드웨어 VPU 기능을 끄고 순수 CPU 자원(SW)만으로 디코딩 혹은 인코딩을 수행하도록 강제할 수 있습니다. 정상적인 성능 테스트를 위해서는 사용을 지양합니다.
+
 ```bash
-./run_dxbenchmark.sh --parallel
+# SW 디코더만 강제로 사용 (인코더는 HW)
+sudo python3 run_pipeline_benchmark.py --decoder sw --duration 60
+
+# SW 인코더만 강제로 사용 (디코더는 HW)
+sudo python3 run_pipeline_benchmark.py --encoder sw --duration 60
+
+# 디코딩, 인코딩 모두 SW(CPU) 사용
+sudo python3 run_pipeline_benchmark.py --decoder sw --encoder sw --duration 60
 ```
 
 ---
 
-## 5. 실행 로그 및 결과 저장 방식
+## 📂 출력 결과 (Output)
 
-벤치마크가 실행되면 `result/` 디렉터리가 자동으로 생성되며, 측정된 성능 지표 파일들이 저장됩니다.
+실행이 완료되면 (또는 `Ctrl+C`로 중단한 즉시) 터미널에 요약 통계가 출력되며, `result/` 디렉터리에 다음 파일들이 생성됩니다.
 
-1. **로그 파일 (`benchmark_YYYYMMDD_HHMMSS.log`)**
-   - 벤치마크 실행 시 터미널에 출력되는 모든 표준 출력(stdout) 및 에러(stderr)가 기록됩니다.
-   - NPU 처리 시간, CPU 후처리 소요 시간, 프레임 속도(FPS) 등의 텍스트 기록을 포함합니다.
-2. **JSON 결과 파일 (`DXBENCHMARK_*.json`)**
-   - NPU별 추론 시간, FPS 등 벤치마크 구조화 데이터가 저장되며, 스크립트 내부에서 이 JSON을 파싱하여 화면에 TOPS 등을 요약 출력합니다.
-   - 병렬 모드(`--parallel`) 시에는 `result/npu0_...`, `result/npu1_...` 등 코어별 폴더에 분리되어 저장됩니다.
-
----
-
-## 6. 실시간 시스템 모니터링 (`cpu_temp_monitor.py`)
-
-벤치마크(NPU 부하) 실행 중 열 스로틀링이나 CPU 병목(후처리 등) 현상을 실시간 모니터링하기 위해 사용합니다. 가벼운 터미널 UI(TUI) 형태로 제공됩니다.
-
-### 실행 방법
-새로운 터미널 창을 하나 더 열어 아래 명령어를 실행합니다. (벤치마크와 동시 실행 권장)
-
-```bash
-# 기본 주기(2초) 갱신 모니터링
-python3 cpu_temp_monitor.py
-
-# 갱신 주기를 1초로 변경
-python3 cpu_temp_monitor.py 1
-```
-
-### 모니터링 화면 보는 법
-- **CPU Core Usage (사용률)**: 전체 및 각 코어별(0~N) 실시간 CPU 사용률이 바 형태로 나타납니다. `run_dxbenchmark.sh` 실행 시 CPU 후처리(Format Handler 등) 점유율이 높아지는지 확인할 때 유용합니다.
-- **Thermal Zones (온도)**: SoC 전체, Big/Little 코어별, NPU의 현재 온도를 확인합니다. 85°C(🔴 Red) 이상이면 스로틀링 위험이 있습니다.
-- **종료 방법**: `Ctrl + C` 누르면 원래 터미널 화면으로 깔끔하게 복구됩니다.
-
----
-
-## 요약 및 팁
-* 벤치마크 테스트 전 반드시 **새로운 환경에 맞춘 경로(`/home/사용자명/...`) 수정**을 잊지 마세요.
-* **터미널 2개**를 띄우고 한 곳에서는 `cpu_temp_monitor.py 1`을 실행해두고, 다른 곳에서 `./run_dxbenchmark.sh`을 실행하면 가장 이상적으로 시스템 성능을 확인할 수 있습니다.
-
-| 변수 | 기본값 | 설명 |
-|------|--------|------|
-| `DEFAULT_MODEL_DIR` | `model_single/` | 벤치마크 모델 디렉터리 |
-| `DEFAULT_TIME` | `60` 초 | 벤치마크 실행 시간 |
-| `MODEL_GFLOPS` | `180` | YOLOV5X 기준 연산량 |
-| `TARGET_TOPS` | `25` | NPU 이론 최대 TOPS (RK3588 DeepX NPU) |
+*   `gst_benchmark_YYYYMMDD_HHMMSS.md`: Markdown 문법으로 작성된 종합 벤치마크 보고서 (사양, 옵션, FPS, 레이턴시 단계표 포함).
+*   `gst_benchmark_YYYYMMDD_HHMMSS.json`: 프로그램이나 스크립트에서 자동 파싱할 수 있는 전체 원시 데이터.
+*   `pipeline_ch0_YYYYMMDD_HHMMSS.csv`: 프레임별로 기록된 개별 레이턴시 통계.
