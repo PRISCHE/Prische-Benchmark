@@ -1,0 +1,3 @@
+/home/prische/gstbenchmark/pipeline_gst/build/CMakeFiles/gst_benchmark_pipeline.dir
+/home/prische/gstbenchmark/pipeline_gst/build/CMakeFiles/edit_cache.dir
+/home/prische/gstbenchmark/pipeline_gst/build/CMakeFiles/rebuild_cache.dir

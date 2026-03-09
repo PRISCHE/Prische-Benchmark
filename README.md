@@ -123,6 +123,27 @@ sudo python3 run_pipeline_benchmark.py --encoder sw --duration 60
 sudo python3 run_pipeline_benchmark.py --decoder sw --encoder sw --duration 60
 ```
 
+### 5. YOLOv8 Pose 모델 8채널 FHD 벤치마크 실행 (테스트 비디오 사용)
+
+YOLOv8 Pose 모델을 사용하여 FHD 해상도의 8채널 비디오 파이프라인 성능을 테스트하는 명령어입니다. `--test-video` 옵션을 추가하면 로컬에 FHD 해상도의 테스트 비디오(`test_video.mp4`)를 자동으로 생성하여 스트리밍 소스로 활용합니다. (VPU 하드웨어 디코딩이 기본으로 자동 적용됩니다.)
+
+```bash
+sudo python3 run_pipeline_benchmark.py \
+    --model "model/yolov8l_pose.dxnn" \
+    --task pose \
+    --num-channels 8 \
+    --test-video \
+    --duration 60
+```
+
+> **⚠️ 테스트 비디오 포맷 주의사항**
+> `--test-video` 옵션으로 자동 생성되는 `test_video.mp4`는 반드시 **H.264 YUV420 8비트** 포맷이어야 합니다.
+> Rockchip VPU 하드웨어 디코더(`mppvideodec`)는 H.264 High 4:4:4 프로필이나 10비트 YUV를 지원하지 않습니다.
+> 만약 기존에 생성된 `test_video.mp4`가 호환되지 않는 포맷이라면, 삭제 후 재실행하면 VPU 호환 포맷으로 자동 재생성됩니다.
+> ```bash
+> rm -f test_video.mp4  # 기존 비호환 영상 삭제 후 재실행
+> ```
+
 ---
 
 ## 📂 출력 결과 (Output)

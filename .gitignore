@@ -3,9 +3,10 @@ rtsp_address.txt
 test_video.mp4
 
 # Internal developer documentation
-architecture.md
-troubleshooting_debian12.md
-pipeline_gst/
+# architecture.md
+# troubleshooting_debian12.md
+benchmark_analysis_*.md
+# pipeline_gst/
 DX-doc/
 
 
@@ -17,6 +18,6 @@ model/*
 !model/.gitkeep
 
 # MediaMTX and streaming temp files
-mediamtx
+# mediamtx
 *.log
 hls_output/

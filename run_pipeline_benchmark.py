@@ -149,6 +149,39 @@ def get_ram_info():
     return total, avail
 
 
+def get_pcie_info():
+    """DX_M1 NPU의 PCIe 연결 정보 (Gen, Lane) 조회"""
+    try:
+        # DX_M1 NPU (보통 01:00.0 등에 위치함. lspci 전체에서 DX_M1의 LnkSta 확인)
+        output = subprocess.check_output("lspci -vv 2>/dev/null", shell=True).decode("utf-8", errors="replace")
+        
+        in_dx_device = False
+        link_speed = "Unknown"
+        link_width = "Unknown"
+        
+        for line in output.split('\n'):
+            if "DX_M1" in line or "Processing accelerators: DEEPX" in line:
+                in_dx_device = True
+            elif line.startswith("00") and "PCI bridge" in line:
+                if in_dx_device: # 이미 찾았고 다음 디바이스로 넘어가면 종료
+                    break
+            
+            if in_dx_device and "LnkSta:" in line:
+                # ex: LnkSta: Speed 8GT/s, Width x4
+                m_speed = re.search(r'Speed\s+([^,]+)', line)
+                m_width = re.search(r'Width\s+(x\d+)', line)
+                if m_speed: link_speed = m_speed.group(1).replace("GT/s", " GT/s")
+                if m_width: link_width = m_width.group(1)
+                
+                # 보통 8GT/s = Gen3, 5GT/s = Gen2
+                gen_name = "Gen3" if "8" in link_speed else ("Gen2" if "5" in link_speed else "")
+                return f"PCIe {gen_name} {link_width} ({link_speed})"
+                
+    except Exception:
+        pass
+    return "Unknown"
+
+
 def get_soc_temp():
     base = "/sys/class/thermal"
     best = 0.0
@@ -347,10 +380,13 @@ def parse_pipeline_log(log_path):
 
 def print_pipeline_results(parsed, sys_stats, board_model, model_name, interval, decoder_mode, encoder_mode):
     """파이프라인 벤치마크 결과를 콘솔에 출력"""
+    pcie_info = get_pcie_info()
+    
     print(f"\n{'='*70}")
     print(f"  {BOLD}{CYAN}📊 GStreamer Pipeline Benchmark 결과 — {board_model}{RESET}")
     print(f"{'='*70}")
     print(f"  모델: {model_name}  |  추론 간격: {interval}프레임")
+    print(f"  NPU PCIe: {pcie_info}")
     print(f"  디코더: {parsed.get('decoder_type', decoder_mode)}  |  인코더: {parsed.get('encoder_type', encoder_mode)}")
     print(f"  총 프레임: {parsed['total_frames']}  |  추론 프레임: {parsed['inference_frames']}")
     print(f"  경과 시간: {parsed['elapsed_sec']:.1f}초  |  FPS: {GREEN}{BOLD}{parsed['overall_fps']:.2f}{RESET}")
@@ -407,6 +443,7 @@ def save_pipeline_results(parsed, sys_stats, board_model, model_name, interval,
 
     cpu_model, cpu_cores, cpu_max_mhz = get_cpu_info()
     ram_total, _ = get_ram_info()
+    pcie_info = get_pcie_info()
 
     # TOPS 계산
     gflops = get_model_gflops(model_name)
@@ -434,6 +471,7 @@ def save_pipeline_results(parsed, sys_stats, board_model, model_name, interval,
             "cpu_cores": cpu_cores,
             "cpu_max_mhz": cpu_max_mhz,
             "ram_total_mb": ram_total,
+            "npu_pcie": pcie_info
         },
         "benchmark_config": {
             "model": model_name,
@@ -464,6 +502,7 @@ def save_pipeline_results(parsed, sys_stats, board_model, model_name, interval,
             f.write(f"\n| CPU 최대 주파수 | {cpu_max_mhz} MHz |")
         if ram_total:
             f.write(f"\n| RAM | {ram_total} MB |")
+        f.write(f"\n| NPU PCIe | {pcie_info} |")
         f.write(f"\n| 파이프라인 | GStreamer |")
         f.write(f"\n| 디코더 | {parsed.get('decoder_type', decoder_mode)} |")
         f.write(f"\n| 인코더 | {parsed.get('encoder_type', encoder_mode)} |")
@@ -514,6 +553,8 @@ def main():
                         help=f"RTSP 입력 소스")
     parser.add_argument("--model", default=DEFAULT_MODEL,
                         help=f"모델 파일 경로")
+    parser.add_argument("--task", default="det", choices=["det", "pose"],
+                        help="실행할 Task 유형: det(객체인식, 기본) 또는 pose(자세 추정)")
     parser.add_argument("--test-video", action="store_true",
                         help="RTSP 입력 대신 로컬 FHD 30fps 60초 테스트 영상을 자동 생성 및 사용")
     parser.add_argument("--duration", type=int, default=DEFAULT_DURATION,
@@ -546,14 +587,18 @@ def main():
     if args.test_video:
         if not os.path.isfile(TEST_VIDEO_PATH):
             print(f"  🎬 로컬 테스트 영상이 없습니다. FHD 30fps 60초 영상을 생성합니다...")
+            # ⚠️ VPU(mppvideodec) 호환을 위해 반드시 YUV420 8비트(I420)로 변환 후 인코딩해야 함
+            # videotestsrc 기본 출력이 YUV444일 수 있어, videoconvert + I420 caps 강제 지정
             generate_cmd = [
                 "gst-launch-1.0", "-e", "videotestsrc", "num-buffers=1800",
                 "!", "video/x-raw,width=1920,height=1080,framerate=30/1",
-                "!", "v4l2h264enc", "!", "h264parse", "!", "mp4mux",
+                "!", "videoconvert",
+                "!", "video/x-raw,format=I420",
+                "!", "mpph264enc", "!", "h264parse", "!", "mp4mux",
                 "!", "filesink", f"location={TEST_VIDEO_PATH}"
             ]
             try:
-                # v4l2h264enc (HW) 인코더 우선 시도
+                # mpph264enc (HW) 인코더 우선 시도
                 subprocess.run(generate_cmd, check=True, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
                 print(f"  ✅ 테스트 영상 생성 완료: {TEST_VIDEO_PATH}")
             except Exception:
@@ -561,6 +606,8 @@ def main():
                 generate_cmd_sw = [
                     "gst-launch-1.0", "-e", "videotestsrc", "num-buffers=1800",
                     "!", "video/x-raw,width=1920,height=1080,framerate=30/1",
+                    "!", "videoconvert",
+                    "!", "video/x-raw,format=I420",
                     "!", "x264enc", "bitrate=2000", "!", "h264parse", "!", "mp4mux",
                     "!", "filesink", f"location={TEST_VIDEO_PATH}"
                 ]
@@ -570,8 +617,9 @@ def main():
                 except Exception as e:
                     print(f"  ❌ 테스트 영상 생성 실패: {e}")
                     return 1
-        args.input = f"file://{TEST_VIDEO_PATH}"
-        print(f"  🎥 테스트 영상 (60초) 소스를 사용합니다: {args.input}")
+                    
+        # RTSP 스트리밍은 아래 파이프라인 실행 직전에 MediaMTX와 함께 처리됨
+        pass
 
     # 누적 저장을 위해 이전 로그를 지우지 않습니다.
     # 이번 실행을 위한 고유의 서브 폴더를 생성합니다.
@@ -582,6 +630,7 @@ def main():
     board_model = get_board_model()
     cpu_model, cpu_cores, cpu_max_mhz = get_cpu_info()
     ram_total, ram_avail = get_ram_info()
+    pcie_info = get_pcie_info()
     model_name = os.path.basename(args.model)
 
     # ── 헤더 출력 ──────────────────────────────────
@@ -598,6 +647,7 @@ def main():
         print(f"  {DIM}CPU Max  :{RESET} {cpu_max_mhz} MHz")
     if ram_total:
         print(f"  {DIM}RAM      :{RESET} {ram_total}MB (사용 가능: {ram_avail}MB)")
+    print(f"  {DIM}NPU PCIe :{RESET} {pcie_info}")
     print(f"  {DIM}디코더   :{RESET} {decoder_label}")
     print(f"  {DIM}인코더   :{RESET} {encoder_label}")
     print(f"  {DIM}모델     :{RESET} {model_name}")
@@ -612,12 +662,40 @@ def main():
     procs = []
     stream_procs = []
     
+    # test-video 옵션: MediaMTX 기반 RTSP 스트리밍 소스 생성
+    if getattr(args, "test_video", False):
+        print(f"  {BOLD}{GREEN}▶ 로컬 비디오 RTSP 스트리밍 소스 생성 (test_video.mp4){RESET}")
+        try:
+            mtx_log = open(os.path.join(SCRIPT_DIR, "mediamtx.log"), "a")
+            p_mtx = subprocess.Popen(["./mediamtx"], cwd=SCRIPT_DIR, stdout=mtx_log, stderr=subprocess.STDOUT, preexec_fn=os.setsid)
+            stream_procs.append(p_mtx)
+            time.sleep(2) # MediaMTX 시작 대기
+            
+            ff_log = open(os.path.join(SCRIPT_DIR, "ffmpeg_test.log"), "w")
+            ffmpeg_src_cmd = [
+                "ffmpeg", "-hide_banner", "-nostdin",
+                "-re", "-stream_loop", "-1",
+                "-i", "test_video.mp4",
+                "-c:v", "copy",
+                "-f", "rtsp",
+                "-rtsp_transport", "tcp",
+                "rtsp://localhost:8554/test_src"
+            ]
+            p_ff_src = subprocess.Popen(ffmpeg_src_cmd, cwd=SCRIPT_DIR, stdout=ff_log, stderr=subprocess.STDOUT, preexec_fn=os.setsid)
+            stream_procs.append(p_ff_src)
+            args.input = "rtsp://localhost:8554/test_src"
+            time.sleep(3) # RTP 패킷 전송 시작 대기
+        except Exception as e:
+            print(f"  ❌ 테스트 비디오 RTSP 생성 실패: {e}")
+            sys.exit(1)
+            
     if args.stream:
         print(f"  {BOLD}{GREEN}▶ 스트리밍 서비스 시작 (MediaMTX & WebServer){RESET}")
         try:
-            mtx_log = open(os.path.join(SCRIPT_DIR, "mediamtx.log"), "w")
-            p_mtx = subprocess.Popen(["./mediamtx"], cwd=SCRIPT_DIR, stdout=mtx_log, stderr=subprocess.STDOUT, preexec_fn=os.setsid)
-            stream_procs.append(p_mtx)
+            if not getattr(args, "test_video", False): # test-video에서 이미 켰으면 생략
+                mtx_log = open(os.path.join(SCRIPT_DIR, "mediamtx.log"), "a")
+                p_mtx = subprocess.Popen(["./mediamtx"], cwd=SCRIPT_DIR, stdout=mtx_log, stderr=subprocess.STDOUT, preexec_fn=os.setsid)
+                stream_procs.append(p_mtx)
             
             web_log = open(os.path.join(SCRIPT_DIR, "webserver.log"), "w")
             p_web = subprocess.Popen([sys.executable, "webserver.py"], cwd=SCRIPT_DIR, stdout=web_log, stderr=subprocess.STDOUT, preexec_fn=os.setsid)
@@ -653,6 +731,7 @@ def main():
                 "--model", args.model,
                 "--interval", str(args.interval),
                 "--channel-id", str(i),
+                "--task", args.task,
                 "--decoder", args.decoder,
                 "--encoder", args.encoder,
                 "--output-prefix", output_prefix,
