@@ -46,7 +46,7 @@ def get_default_rtsp():
     return "rtsp://admin:password@192.168.0.200:554/Streaming/Channels/101"
 
 DEFAULT_INPUT = get_default_rtsp()
-DEFAULT_DURATION = 30
+DEFAULT_DURATION = 60
 DEFAULT_INTERVAL = 3
 
 SCRIPT_DIR = os.path.dirname(os.path.abspath(__file__))

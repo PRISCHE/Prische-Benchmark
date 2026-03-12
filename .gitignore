@@ -3,12 +3,9 @@ rtsp_address.txt
 test_video.mp4
 
 # Internal developer documentation
-# architecture.md
-# troubleshooting_debian12.md
+markdown/
 benchmark_analysis_*.md
-# pipeline_gst/
 DX-doc/
-
 
 # Keep directories but ignore contents
 result_all/*
@@ -21,3 +18,4 @@ model/*
 # mediamtx
 *.log
 hls_output/
+proceed.md
